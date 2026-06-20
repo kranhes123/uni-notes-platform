@@ -1,6 +1,7 @@
 import 'package:dart_frog/dart_frog.dart';
 import 'package:mongo_dart/mongo_dart.dart';
 import '../../lib/services/similarity_service.dart';
+import '../../lib/services/pdf_text_service.dart';
 import '../../lib/db.dart';
 
 Future<Response> onRequest(RequestContext context) async {
@@ -50,7 +51,10 @@ Future<Response> onRequest(RequestContext context) async {
       final fileName = (body['fileName'] ?? '').toString().trim();
       final fileUrl = (body['fileUrl'] ?? '').toString().trim();
       final publicId = (body['publicId'] ?? '').toString().trim();
-      final noteText = (body['noteText'] ?? '').toString().trim();
+      final clientNoteText = (body['noteText'] ?? '').toString().trim();
+
+      // Kullanıcı "benzerlik yüksek çıksa da yükle" derse buraya true gelir.
+      final forceUpload = body['forceUpload'] == true;
 
       if (title.isEmpty ||
           description.isEmpty ||
@@ -70,58 +74,84 @@ Future<Response> onRequest(RequestContext context) async {
         );
       }
 
+      // --- PDF içeriğini gerçekten oku ---
+      // Sadece .pdf dosyalarda anlamlı; diğer (video vb.) tiplerde boş kalır.
+      String extractedText = '';
+      if (fileName.toLowerCase().endsWith('.pdf')) {
+        extractedText = await PdfTextService.extractTextFromUrl(fileUrl);
+      }
+
+      // Öncelik sırası:
+      // 1) İstemciden gelen noteText (varsa)
+      // 2) Sunucuda PDF'ten çıkarılan gerçek içerik
+      // 3) Son çare: metadata (başlık/açıklama/dosya adı/ders bilgisi)
+      final newNoteText = clientNoteText.isNotEmpty
+          ? clientNoteText
+          : extractedText.isNotEmpty
+              ? extractedText
+              : '$title $description $fileName $courseName $courseCode';
+
+      // Bu metnin gerçek PDF içeriği mi yoksa metadata fallback mi olduğunu
+      // ileride debug etmek için işaretleyelim.
+      final isContentBased = extractedText.isNotEmpty || clientNoteText.isNotEmpty;
+
       final notes = await DbService.notesCollection();
-
-      final newNoteText = noteText.isNotEmpty
-          ? noteText
-          : '$title $description $fileName $courseName $courseCode';
-
-      // Aynı bölüm + ders kodundaki mevcut notları çek
-      final existingNotes = await notes.find({
-        'department': department,
-        'courseCode': courseCode,
-      }).toList();
-
-      // Corpus: tüm mevcut notların metinleri (IDF için)
-      final corpusTexts = existingNotes.map((note) {
-        final raw = (note['noteText'] ?? '').toString().trim();
-        return raw.isNotEmpty
-            ? raw
-            : '${note['title'] ?? ''} ${note['description'] ?? ''} '
-                '${note['fileName'] ?? ''} ${note['courseName'] ?? ''} '
-                '${note['courseCode'] ?? ''}';
-      }).toList();
 
       double highestSimilarity = 0;
       Map<String, dynamic>? mostSimilarNote;
 
-      for (int i = 0; i < existingNotes.length; i++) {
-        final note = existingNotes[i];
-        final oldNoteText = corpusTexts[i];
+      if (!forceUpload) {
+        // Aynı bölüm + ders kodundaki mevcut notları çek
+        final existingNotes = await notes.find({
+          'department': department,
+          'courseCode': courseCode,
+        }).toList();
 
-        // Corpus'u kullanan gelişmiş versiyon
-        final similarity = SimilarityService.calculateSimilarityWithCorpus(
-          newNoteText,
-          oldNoteText,
-          corpusTexts,
-        );
+        // Corpus: tüm mevcut notların metinleri (IDF için)
+        final corpusTexts = existingNotes.map((note) {
+          final raw = (note['noteText'] ?? '').toString().trim();
+          return raw.isNotEmpty
+              ? raw
+              : '${note['title'] ?? ''} ${note['description'] ?? ''} '
+                  '${note['fileName'] ?? ''} ${note['courseName'] ?? ''} '
+                  '${note['courseCode'] ?? ''}';
+        }).toList();
 
-        if (similarity > highestSimilarity) {
-          highestSimilarity = similarity;
-          mostSimilarNote = note;
+        for (int i = 0; i < existingNotes.length; i++) {
+          final note = existingNotes[i];
+          final oldNoteText = corpusTexts[i];
+
+          final similarity = SimilarityService.calculateSimilarityWithCorpus(
+            newNoteText,
+            oldNoteText,
+            corpusTexts,
+          );
+
+          if (similarity > highestSimilarity) {
+            highestSimilarity = similarity;
+            mostSimilarNote = note;
+          }
         }
-      }
 
-      if (highestSimilarity >= 0.80) {
-        return Response.json(
-          statusCode: 409,
-          body: {
-            'message': 'Bu not çok benziyor, kaydedilmedi.',
-            'similarity': (highestSimilarity * 100).round(),
-            'isTooSimilar': true,
-            'similarNoteTitle': mostSimilarNote?['title'],
-          },
-        );
+        // Not: Gerçek PDF içeriği varsa eşik biraz daha güvenle uygulanabilir
+        // (çünkü artık metadata tekrarından kaynaklı yanlış pozitif riski düştü).
+        // Metadata fallback'teyken daha toleranslı davranıyoruz.
+        final threshold = isContentBased ? 0.85 : 0.92;
+
+        if (highestSimilarity >= threshold) {
+          return Response.json(
+            statusCode: 409,
+            body: {
+              'message': 'Bu not çok benziyor.',
+              'similarity': (highestSimilarity * 100).round(),
+              'isTooSimilar': true,
+              'similarNoteTitle': mostSimilarNote?['title'],
+              // Frontend bu alanı görünce "Yine de yükle" butonu gösterip
+              // forceUpload: true ile tekrar istek atabilir.
+              'canForceUpload': true,
+            },
+          );
+        }
       }
 
       final result = await notes.insertOne({
