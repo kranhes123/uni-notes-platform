@@ -195,7 +195,10 @@ class _UploadNoteScreenState extends State<UploadNoteScreen> {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: false,
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
+      allowedExtensions: [
+      'pdf', 'doc', 'docx', 'txt', 'pptx',
+      'xlsx', 'jpg', 'jpeg', 'png', 'zip', 'mp4',
+    ],
       withData: true,
     );
 
@@ -746,9 +749,9 @@ class _UploadNoteScreenState extends State<UploadNoteScreen> {
                                 5,
                                 t('Dosya', 'File'),
                                 helper: t(
-                                  'PDF, Word veya metin dosyası yükleyebilirsin.',
-                                  'You can upload a PDF, Word, or text file.',
-                                ),
+  'PDF, Word, PowerPoint, Excel, görsel veya video yükleyebilirsin.',
+  'You can upload PDF, Word, PowerPoint, Excel, image or video files.',
+),
                               ),
                               Container(
                                 width: double.infinity,
@@ -946,7 +949,12 @@ String extractTextFromSelectedFile({
   if (lowerFileName.endsWith('.docx')) {
     return extractTextFromDocx(fileBytes);
   }
-
+  if (lowerFileName.endsWith('.pptx')) {
+    return extractTextFromPptx(fileBytes);
+  }
+  if (lowerFileName.endsWith('.xlsx')) {
+    return extractTextFromXlsx(fileBytes);
+  }
   if (lowerFileName.endsWith('.txt')) {
     return utf8.decode(fileBytes, allowMalformed: true);
   }
@@ -975,4 +983,62 @@ String extractTextFromDocx(Uint8List fileBytes) {
       .findAllElements('w:t')
       .map((node) => node.innerText)
       .join(' ');
+}
+
+
+String extractTextFromPptx(Uint8List fileBytes) {
+  try {
+    final archive = ZipDecoder().decodeBytes(fileBytes);
+    final buffer = StringBuffer();
+
+    // PPTX içindeki her slayt XML dosyasını tara
+    for (final file in archive.files) {
+      if (file.name.startsWith('ppt/slides/slide') &&
+          file.name.endsWith('.xml')) {
+        final xmlString = utf8.decode(
+          file.content as List<int>,
+          allowMalformed: true,
+        );
+        final document = XmlDocument.parse(xmlString);
+
+        // Slayttaki tüm metin elementlerini çek
+        final texts = document
+            .findAllElements('a:t')
+            .map((node) => node.innerText.trim())
+            .where((text) => text.isNotEmpty)
+            .join(' ');
+
+        buffer.write('$texts ');
+      }
+    }
+
+    return buffer.toString().trim();
+  } catch (e) {
+    return '';
+  }
+}
+String extractTextFromXlsx(Uint8List fileBytes) {
+  try {
+    final archive = ZipDecoder().decodeBytes(fileBytes);
+    final buffer = StringBuffer();
+
+    for (final file in archive.files) {
+      if (file.name == 'xl/sharedStrings.xml') {
+        final xmlString = utf8.decode(
+          file.content as List<int>,
+          allowMalformed: true,
+        );
+        final document = XmlDocument.parse(xmlString);
+        final texts = document
+            .findAllElements('t')
+            .map((node) => node.innerText.trim())
+            .where((text) => text.isNotEmpty)
+            .join(' ');
+        buffer.write(texts);
+      }
+    }
+    return buffer.toString().trim();
+  } catch (e) {
+    return '';
+  }
 }
