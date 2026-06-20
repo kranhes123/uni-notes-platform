@@ -219,7 +219,6 @@ class _UploadNoteScreenState extends State<UploadNoteScreen> {
     final description = descriptionController.text.trim();
 
     if (title.isEmpty ||
-        description.isEmpty ||
         selectedGrade == null ||
         selectedSemester == null ||
         selectedCourseName == null ||
