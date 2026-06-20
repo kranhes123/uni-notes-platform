@@ -96,7 +96,8 @@ class CourseDetailScreen extends StatelessWidget {
   }
 }
 
-class _NoteSection extends StatelessWidget {
+/// Bölüm başlığı (Slaytlar, Videolar vb.) - tıklanınca tüm bölüm açılıp kapanır.
+class _NoteSection extends StatefulWidget {
   final String title;
   final List<NoteModel> notes;
 
@@ -106,56 +107,97 @@ class _NoteSection extends StatelessWidget {
   });
 
   @override
+  State<_NoteSection> createState() => _NoteSectionState();
+}
+
+class _NoteSectionState extends State<_NoteSection> {
+  bool _expanded = true;
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '$title (${notes.length})',
-          style: const TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Text(
+                  '${widget.title} (${widget.notes.length})',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        const SizedBox(height: 14),
-        if (notes.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: const Text(
-              'Bu kategoride henüz not yok.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          )
-        else
-          Column(
-            children: notes
-                .map(
-                  (note) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _UploadedNoteCard(note: note),
-                  ),
-                )
-                .toList(),
-          ),
+        const SizedBox(height: 10),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: !_expanded
+              ? const SizedBox.shrink()
+              : widget.notes.isEmpty
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: const Text(
+                        'Bu kategoride henüz not yok.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: widget.notes
+                          .map(
+                            (note) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _UploadedNoteCard(note: note),
+                            ),
+                          )
+                          .toList(),
+                    ),
+        ),
       ],
     );
   }
 }
 
-class _UploadedNoteCard extends StatelessWidget {
+/// Tek bir not kartı - varsayılan kapalı, üstüne tıklayınca açılır.
+class _UploadedNoteCard extends StatefulWidget {
   final NoteModel note;
 
   const _UploadedNoteCard({required this.note});
+
+  @override
+  State<_UploadedNoteCard> createState() => _UploadedNoteCardState();
+}
+
+class _UploadedNoteCardState extends State<_UploadedNoteCard> {
+  bool _expanded = false;
 
   Future<void> openFile(BuildContext context, String url) async {
     final uri = Uri.parse(url);
@@ -192,9 +234,10 @@ class _UploadedNoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final note = widget.note;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -209,61 +252,108 @@ class _UploadedNoteCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            note.title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
+          // Tıklanabilir başlık satırı - her zaman görünür.
+          InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          note.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          formatDate(note.createdAt),
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            note.description,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Color(0xFF6B7280),
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _InfoChip(label: note.noteType),
-              _InfoChip(label: note.courseCode),
-              _InfoChip(label: note.grade),
-              _InfoChip(label: note.semester),
-              _InfoChip(label: note.fileName),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  formatDate(note.createdAt),
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 13,
+          // Açılınca gelen detaylar.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
+            child: !_expanded
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                        const SizedBox(height: 14),
+                        if (note.description.isNotEmpty) ...[
+                          Text(
+                            note.description,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: Color(0xFF6B7280),
+                              height: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ],
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            _InfoChip(label: note.noteType),
+                            _InfoChip(label: note.courseCode),
+                            _InfoChip(label: note.grade),
+                            _InfoChip(label: note.semester),
+                            _InfoChip(label: note.fileName),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              await openFile(context, note.fileUrl);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4F46E5),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Dosyayı Gör'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  await openFile(context, note.fileUrl);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Dosyayı Gör'),
-              ),
-            ],
           ),
         ],
       ),
