@@ -14,7 +14,7 @@ const String _resendApiKey = 're_HXe85va2_JjQdrUVK1HSsDSbWSc15ApXW';
 const String _receiverEmail = 'duzyol975337@gmail.com';
 
 // Resend test modunda domain doğrulaman yoksa SADECE bu adresten gönderebilirsin.
-const String _senderAddress = 'Uni Notes <onboarding@resend.com>';
+const String _senderAddress = 'Uni Notes <onboarding@resend.dev>';
 // ─────────────────────────────────────────────────────────────────────────
 
 Future<Response> onRequest(RequestContext context) async {
