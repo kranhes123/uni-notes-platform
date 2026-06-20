@@ -18,7 +18,7 @@ class _DerslerimScreenState extends State<DerslerimScreen> {
   late Future<List<NoteModel>> futureNotes;
 
   final NoteApiService noteApiService = NoteApiService(
-    baseUrl: 'http://localhost:8080',
+    baseUrl: 'https://uni-notes-platform-production.up.railway.app',
   );
 
   final Set<String> savedCourseKeys = {};

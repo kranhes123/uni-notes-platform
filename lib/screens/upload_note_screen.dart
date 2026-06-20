@@ -81,7 +81,7 @@ class _UploadNoteScreenState extends State<UploadNoteScreen> {
   );
 
   final NoteApiService noteApiService = NoteApiService(
-    baseUrl: 'http://localhost:8080',
+    baseUrl: 'https://uni-notes-platform-production.up.railway.app',
   );
 
   // ---------------------------------------------------------------------

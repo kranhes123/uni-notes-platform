@@ -18,7 +18,7 @@ class _NotesScreenState extends State<NotesScreen> {
   late Future<List<NoteModel>> futureNotes;
 
   final NoteApiService noteApiService = NoteApiService(
-    baseUrl: 'http://localhost:8080',
+    baseUrl: 'https://uni-notes-platform-production.up.railway.app',
   );
 
   String selectedDepartment = 'Tümü';

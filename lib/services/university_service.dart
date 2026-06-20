@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class UniversityService {
-  static const String baseUrl = 'http://localhost:8080';
+  static const String baseUrl = 'https://uni-notes-platform-production.up.railway.app';
 
   static Future<List<Map<String, dynamic>>> getCourses({
     required String department,

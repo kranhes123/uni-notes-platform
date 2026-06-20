@@ -54,7 +54,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
   try {
     final response = await http.post(
-      Uri.parse('http://localhost:8080/contact'), // canlıya alınca backend URL'in ile değiştir
+      Uri.parse('https://uni-notes-platform-production.up.railway.app/contact'), // canlıya alınca backend URL'in ile değiştir
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'name': _nameController.text.trim(),
