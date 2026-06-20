@@ -13,7 +13,6 @@ dependencies:
   http: ^1.2.2
   archive: ^4.0.9
   xml: ^6.5.0
-  syncfusion_flutter_pdf: ^29.2.11
   mailer: ^6.1.0
 
 dev_dependencies:
