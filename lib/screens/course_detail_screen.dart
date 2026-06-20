@@ -16,7 +16,7 @@ class CourseDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sortedNotes = [...courseGroup.notes]
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     final slideNotes =
         sortedNotes.where((note) => note.noteType == 'Slayt').toList();
@@ -295,4 +295,3 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
-
