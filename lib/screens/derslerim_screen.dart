@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/course_group.dart';
 import '../models/note_model.dart';
 import '../services/note_api_service.dart';
+import '../services/session_notifier.dart';
 import '../widgets/custom_footer.dart';
 import '../widgets/custom_header.dart';
 import 'course_detail_screen.dart';
@@ -25,7 +26,15 @@ class _DerslerimScreenState extends State<DerslerimScreen> {
   String userEmail = '';
   String language = 'TR';
 
+  // Sayfa, kullanıcı verisini en az bir kez yüklemeyi tamamladı mı?
+  // Bu, "henüz yüklenmedi" ile "yüklendi ama oturum kapalı / boş" durumlarını
+  // birbirinden ayırmak için kullanılır.
+  bool userCoursesLoaded = false;
+
   bool get isEnglish => language == 'EN';
+
+  // Oturum açık mı? userEmail boşsa KESİNLİKLE kapalı kabul edilir.
+  bool get isLoggedIn => userEmail.trim().isNotEmpty;
 
   String t(String tr, String en) => isEnglish ? en : tr;
 
@@ -34,6 +43,22 @@ class _DerslerimScreenState extends State<DerslerimScreen> {
     super.initState();
     futureNotes = noteApiService.getNotes();
     loadUserCourses();
+
+    // Başka bir yerde (CustomHeader vb.) giriş/çıkış yapıldığında bu ekran
+    // hâlâ bellekte (mounted) kalmış olsa bile anında güncellensin.
+    SessionNotifier.instance.addListener(_onSessionChanged);
+  }
+
+  @override
+  void dispose() {
+    SessionNotifier.instance.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
+  void _onSessionChanged() {
+    // Oturum değişti (giriş ya da çıkış yapıldı) -> her şeyi sıfırdan,
+    // SharedPreferences'tan güncel bilgiyi okuyarak yeniden yükle.
+    loadUserCourses();
   }
 
   Future<void> loadUserCourses() async {
@@ -41,16 +66,28 @@ class _DerslerimScreenState extends State<DerslerimScreen> {
     final email = (prefs.getString('email') ?? '').trim().toLowerCase();
     final selectedLanguage = prefs.getString('language') ?? 'TR';
 
+    if (!mounted) return;
+
     if (email.isEmpty) {
+      // OTURUM KAPALI: hiçbir kullanıcıya ait ders gösterilmemeli.
       setState(() {
         userEmail = '';
         language = selectedLanguage;
         savedCourseKeys.clear();
+        userCoursesLoaded = true;
       });
       return;
     }
 
-    final courses = await noteApiService.getUserCourses(email);
+    List<dynamic> courses = [];
+    try {
+      courses = await noteApiService.getUserCourses(email);
+    } catch (_) {
+      // Sunucudan veri çekilemezse de güvenli taraf: boş liste.
+      courses = [];
+    }
+
+    if (!mounted) return;
 
     setState(() {
       userEmail = email;
@@ -62,6 +99,7 @@ class _DerslerimScreenState extends State<DerslerimScreen> {
             (course) => '${course['courseCode']}_${course['courseName']}',
           ),
         );
+      userCoursesLoaded = true;
     });
   }
 
@@ -168,7 +206,12 @@ class _DerslerimScreenState extends State<DerslerimScreen> {
             child: FutureBuilder<List<NoteModel>>(
               future: futureNotes,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                // Notlar hâlâ yükleniyor VEYA kullanıcı/oturum bilgisi henüz
+                // okunmadıysa: yükleniyor göstergesi göster. Bu, oturum kapalı
+                // durumunu "henüz bilinmiyor" ile karıştırıp yanlışlıkla
+                // eski/cache'lenmiş bir grid göstermemizi engeller.
+                if (snapshot.connectionState == ConnectionState.waiting ||
+                    !userCoursesLoaded) {
                   return SingleChildScrollView(
                     child: Column(
                       children: const [
@@ -197,6 +240,85 @@ class _DerslerimScreenState extends State<DerslerimScreen> {
                     ),
                   );
                 }
+
+                // --- SERT GÜVENLİK KİLİDİ ---
+                // Oturum kapalıysa, ne olursa olsun (cache, eski state vb.)
+                // hiçbir ders/not gösterilmez. Doğrudan boş/"giriş yap"
+                // durumunu render edip fonksiyondan çıkıyoruz.
+                if (!isLoggedIn) {
+                  return SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                            vertical: isMobile ? 28 : 40,
+                          ),
+                          child: Center(
+                            child: SizedBox(
+                              width: 1240,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SelectableText(
+                                    t('Derslerim', 'My Courses'),
+                                    style: TextStyle(
+                                      fontSize: isMobile ? 28 : 34,
+                                      fontWeight: FontWeight.bold,
+                                      color: const Color(0xFF111827),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SelectableText(
+                                    t(
+                                      'Eklediğin dersleri buradan hızlıca açabilirsin.',
+                                      'You can quickly access your saved courses here.',
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: isMobile ? 14 : 16,
+                                      height: 1.5,
+                                      color: const Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Container(
+                                    width: double.infinity,
+                                    constraints:
+                                        const BoxConstraints(minHeight: 320),
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: isMobile ? 42 : 56,
+                                      horizontal: 24,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(22),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        t(
+                                          'Derslerimi görmek için giriş yapmalısın.',
+                                          'You need to log in to see your courses.',
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 70),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const CustomFooter(),
+                      ],
+                    ),
+                  );
+                }
+                // --- GÜVENLİK KİLİDİ SONU ---
 
                 final notes = snapshot.data ?? [];
                 final allGroups = groupNotesByCourse(notes);
@@ -446,7 +568,6 @@ class _SummaryCard extends StatelessWidget {
                 SelectableText(
                   value,
                   maxLines: 1,
-                  
                   style: TextStyle(
                     fontSize: isMobile ? 20 : 24,
                     fontWeight: FontWeight.w800,
@@ -594,7 +715,6 @@ class _MyCourseCard extends StatelessWidget {
                   SelectableText(
                     courseGroup.courseName,
                     maxLines: 2,
-                    
                     style: TextStyle(
                       fontSize: isMobile ? 18 : 20,
                       fontWeight: FontWeight.bold,
@@ -608,7 +728,6 @@ class _MyCourseCard extends StatelessWidget {
                       'View uploaded notes for this course.',
                     ),
                     maxLines: 2,
-                    
                     style: TextStyle(
                       fontSize: isMobile ? 13 : 14,
                       height: 1.45,
@@ -655,7 +774,6 @@ class _MyCourseCard extends StatelessWidget {
                   SelectableText(
                     courseGroup.department,
                     maxLines: 1,
-                    
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF6B7280),
