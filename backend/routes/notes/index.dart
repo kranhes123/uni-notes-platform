@@ -53,7 +53,6 @@ Future<Response> onRequest(RequestContext context) async {
       final publicId = (body['publicId'] ?? '').toString().trim();
       final clientNoteText = (body['noteText'] ?? '').toString().trim();
 
-      // Kullanıcı "benzerlik yüksek çıksa da yükle" derse buraya true gelir.
       final forceUpload = body['forceUpload'] == true;
 
       if (title.isEmpty ||
@@ -74,25 +73,17 @@ Future<Response> onRequest(RequestContext context) async {
         );
       }
 
-      // --- PDF içeriğini gerçekten oku ---
-      // Sadece .pdf dosyalarda anlamlı; diğer (video vb.) tiplerde boş kalır.
       String extractedText = '';
       if (fileName.toLowerCase().endsWith('.pdf')) {
         extractedText = await PdfTextService.extractTextFromUrl(fileUrl);
       }
 
-      // Öncelik sırası:
-      // 1) İstemciden gelen noteText (varsa)
-      // 2) Sunucuda PDF'ten çıkarılan gerçek içerik
-      // 3) Son çare: metadata (başlık/açıklama/dosya adı/ders bilgisi)
       final newNoteText = clientNoteText.isNotEmpty
           ? clientNoteText
           : extractedText.isNotEmpty
               ? extractedText
               : '$title $description $fileName $courseName $courseCode';
 
-      // Bu metnin gerçek PDF içeriği mi yoksa metadata fallback mi olduğunu
-      // ileride debug etmek için işaretleyelim.
       final isContentBased = extractedText.isNotEmpty || clientNoteText.isNotEmpty;
 
       final notes = await DbService.notesCollection();
@@ -101,13 +92,11 @@ Future<Response> onRequest(RequestContext context) async {
       Map<String, dynamic>? mostSimilarNote;
 
       if (!forceUpload) {
-        // Aynı bölüm + ders kodundaki mevcut notları çek
         final existingNotes = await notes.find({
           'department': department,
           'courseCode': courseCode,
         }).toList();
 
-        // Corpus: tüm mevcut notların metinleri (IDF için)
         final corpusTexts = existingNotes.map((note) {
           final raw = (note['noteText'] ?? '').toString().trim();
           return raw.isNotEmpty
@@ -133,10 +122,7 @@ Future<Response> onRequest(RequestContext context) async {
           }
         }
 
-        // Not: Gerçek PDF içeriği varsa eşik biraz daha güvenle uygulanabilir
-        // (çünkü artık metadata tekrarından kaynaklı yanlış pozitif riski düştü).
-        // Metadata fallback'teyken daha toleranslı davranıyoruz.
-        final threshold = isContentBased ? 0.85 : 0.92;
+        const threshold = 0.80;
 
         if (highestSimilarity >= threshold) {
           return Response.json(
@@ -146,8 +132,6 @@ Future<Response> onRequest(RequestContext context) async {
               'similarity': (highestSimilarity * 100).round(),
               'isTooSimilar': true,
               'similarNoteTitle': mostSimilarNote?['title'],
-              // Frontend bu alanı görünce "Yine de yükle" butonu gösterip
-              // forceUpload: true ile tekrar istek atabilir.
               'canForceUpload': true,
             },
           );
