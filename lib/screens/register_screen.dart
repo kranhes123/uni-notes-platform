@@ -22,11 +22,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? departmentValue;
 
   bool isLoading = false;
-  String currentLanguage = 'TR'; // Varsayılan dil
+  String currentLanguage = 'TR';
 
-  final List<String> universities = [
-    'Erciyes Üniversitesi',
-  ];
+  final List<String> universities = ['Erciyes Üniversitesi'];
 
   final List<String> grades = [
     'Hazırlık',
@@ -38,7 +36,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     '6. Sınıf',
   ];
 
-  // Dil çeviri sözlüğü
   final Map<String, Map<String, String>> _localizedValues = {
     'TR': {
       'title': 'Kayıt Ol',
@@ -60,7 +57,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'alreadyHaveAccount': 'Zaten hesabın var mı? Giriş Yap',
       'errorEmptyFields': 'Lütfen tüm alanları doldur.',
       'errorShortName': 'Ad soyad en az 3 karakter olmalı.',
-      'errorInvalidEmail': 'Geçerli bir e-posta adresi gir.',
+      // GÜNCELLENDI
+      'errorInvalidEmail': 'Lütfen geçerli bir Erciyes Üniversitesi mail adresi girin (@erciyes.edu.tr).',
       'errorWeakPassword': 'Şifre en az 8 karakter olmalı; büyük harf, küçük harf, rakam ve özel karakter içermeli.',
       'actionSuccess': 'İşlem tamamlandı',
       'errorPrefix': 'Hata: ',
@@ -85,7 +83,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'alreadyHaveAccount': 'Already have an account? Log In',
       'errorEmptyFields': 'Please fill in all fields.',
       'errorShortName': 'Full name must be at least 3 characters long.',
-      'errorInvalidEmail': 'Enter a valid email address.',
+      // GÜNCELLENDI
+      'errorInvalidEmail': 'Please enter a valid Erciyes University email address (@erciyes.edu.tr).',
       'errorWeakPassword': 'Password must be at least 8 characters; include uppercase, lowercase, number, and special character.',
       'actionSuccess': 'Action completed',
       'errorPrefix': 'Error: ',
@@ -95,13 +94,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void initState() {
     super.initState();
-    _loadLanguage(); // Sayfa açılırken header ile aynı SharedPreferences verisini okur
+    _loadLanguage();
   }
 
   Future<void> _loadLanguage() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      // Header'daki anahtarla birebir aynı ('language') ve büyük harf ('TR'/'EN') uyumlu
       currentLanguage = prefs.getString('language') ?? 'TR';
     });
   }
@@ -240,8 +238,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ],
   };
 
+  // GÜNCELLENDI: sadece @erciyes.edu.tr kabul eder
   bool isValidEmail(String email) {
-    final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@erciyes\.edu\.tr$');
     return emailRegex.hasMatch(email);
   }
 
@@ -301,9 +300,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     try {
       final result = await AuthService.register(
@@ -321,8 +318,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         SnackBar(content: Text(result['message'] ?? translate('actionSuccess'))),
       );
 
-      if (result['message'] == 'Kayıt başarılı' || result['message'] == 'Registration successful') {
-        Navigator.pushNamed(context, '/login');
+      // GÜNCELLENDI: verify ekranına yönlendir
+      if (result['needsVerification'] == true) {
+        Navigator.pushNamed(
+          context,
+          '/verify-email',
+          arguments: result['email'],
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -330,9 +332,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     } finally {
       if (!mounted) return;
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
 
@@ -354,17 +354,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: const Color(0xFFF5F7FB),
       body: Column(
         children: [
-          // 1. Header her zaman sayfanın en üstünde sabit kalır
           const CustomHeader(),
-          
-          // 2. Geri kalan tüm alan kaydırılabilir sarmalayıcı olur
           Expanded(
             child: SingleChildScrollView(
-              // Alt taraftaki 40 padding'i 0 yaptık çünkü footer zaten bir boşluk oluşturacak
               padding: const EdgeInsets.only(top: 40, bottom: 0),
               child: Column(
                 children: [
-                  // Kayıt Kartı (Form)
                   Center(
                     child: Container(
                       width: 520,
@@ -413,6 +408,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: emailController,
                             decoration: InputDecoration(
                               labelText: translate('email'),
+                              hintText: 'ornek@erciyes.edu.tr',
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -596,11 +592,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                   ),
-                  
-                  // Form ile footer arasına web sitelerindeki gibi tatlı bir boşluk bırakıyoruz
                   const SizedBox(height: 60),
-                  
-                  // 3. Footer artık kaydırılabilir alanın en altında!
                   const CustomFooter(),
                 ],
               ),

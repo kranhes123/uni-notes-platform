@@ -7,6 +7,7 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/derslerim_screen.dart';
+import 'screens/verify_email_screen.dart'; // YENİ
 
 void main() {
   runApp(const UniNotesApp());
@@ -35,8 +36,16 @@ class UniNotesApp extends StatelessWidget {
         '/profile': (context) => const ProfileScreen(),
         '/my-courses': (context) => const DerslerimScreen(),
       },
+      // YENİ: arguments alan route için onGenerateRoute kullan
+      onGenerateRoute: (settings) {
+        if (settings.name == '/verify-email') {
+          final email = settings.arguments as String;
+          return MaterialPageRoute(
+            builder: (context) => VerifyEmailScreen(email: email),
+          );
+        }
+        return null;
+      },
     );
   }
 }
-
-

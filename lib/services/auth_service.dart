@@ -43,4 +43,22 @@ class AuthService {
 
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
+
+  // Yeni: e-posta doğrulama kodu kontrolü
+  static Future<Map<String, dynamic>> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/verify_email'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email,
+        'code': code,
+      }),
+    );
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return {'success': response.statusCode == 200, ...data};
+  }
 }

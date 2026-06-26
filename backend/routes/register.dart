@@ -1,11 +1,15 @@
+import 'dart:math';
+import 'dart:io';
 import 'package:dart_frog/dart_frog.dart';
 import 'package:mongo_dart/mongo_dart.dart';
-
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../lib/db.dart';
 import '../lib/auth_utils.dart';
 
 bool isValidEmail(String email) {
-  final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  // Sadece @erciyes.edu.tr kabul et
+  final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@erciyes\.edu\.tr$');
   return emailRegex.hasMatch(email);
 }
 
@@ -64,7 +68,7 @@ Future<Response> onRequest(RequestContext context) async {
     if (!isValidEmail(email)) {
       return Response.json(
         statusCode: 400,
-        body: {'message': 'Geçerli bir e-posta adresi gir.'},
+        body: {'message': 'Lütfen geçerli bir Erciyes Üniversitesi mail adresi girin (@erciyes.edu.tr).'},
       );
     }
 
@@ -102,23 +106,73 @@ Future<Response> onRequest(RequestContext context) async {
       );
     }
 
+    // 6 haneli kod üret, 15 dakika geçerli
+    final code = (Random().nextInt(900000) + 100000).toString();
+    final expiresAt = DateTime.now()
+        .add(const Duration(minutes: 15))
+        .toIso8601String();
+
     await users.insertOne({
-  '_id': ObjectId(),
-  'fullName': fullName,
-  'email': email,
-  'passwordHash': hashPassword(password),
-  'university': university,
-  'department': department,
-  'grade': grade,
-  'selectedCourses': <Map<String, dynamic>>[],
-  'createdAt': DateTime.now().toIso8601String(),
-});
+      '_id': ObjectId(),
+      'fullName': fullName,
+      'email': email,
+      'passwordHash': hashPassword(password),
+      'university': university,
+      'department': department,
+      'grade': grade,
+      'selectedCourses': <Map<String, dynamic>>[],
+      'isVerified': false,
+      'verificationCode': code,
+      'verificationExpiresAt': expiresAt,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+
+    // Resend ile doğrulama maili gönder
+    final resendApiKey = Platform.environment['RESEND_API_KEY'] ?? '';
+    final mailResponse = await http.post(
+      Uri.parse('https://api.resend.com/emails'),
+      headers: {
+        'Authorization': 'Bearer $resendApiKey',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'from': 'Uni Notes <noreply@uninotes.com.tr>',
+        'to': [email],
+        'subject': 'E-posta Doğrulama Kodu',
+        'html': '''
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 32px; border-radius: 12px; border: 1px solid #e5e7eb;">
+            <h2 style="color: #3730a3;">Uni Notes</h2>
+            <p style="font-size: 16px; color: #374151;">Doğrulama kodunuz:</p>
+            <div style="font-size: 36px; font-weight: bold; letter-spacing: 12px; color: #3730a3; padding: 16px 0;">
+              $code
+            </div>
+            <p style="font-size: 14px; color: #6b7280;">Bu kod 15 dakika içinde geçersiz olur.</p>
+          </div>
+        ''',
+      }),
+    );
+
+    if (mailResponse.statusCode != 200 && mailResponse.statusCode != 201) {
+      print('RESEND ERROR: ${mailResponse.body}');
+      return Response.json(
+        statusCode: 500,
+        body: {
+          'message': 'Hesap oluşturuldu ancak doğrulama maili gönderilemedi. Lütfen destek ile iletişime geçin.',
+        },
+      );
+    }
 
     return Response.json(
       statusCode: 201,
-      body: {'message': 'Kayıt başarılı'},
+      body: {
+        'message': 'Kayıt başarılı',
+        'email': email,
+        'needsVerification': true,
+      },
     );
-  } catch (e) {
+  } catch (e, st) {
+    print('REGISTER ERROR: $e');
+    print(st);
     return Response.json(
       statusCode: 500,
       body: {'message': 'Hata oluştu', 'error': e.toString()},
