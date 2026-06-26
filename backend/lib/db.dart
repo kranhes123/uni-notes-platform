@@ -22,6 +22,14 @@ class DbService {
     return db.collection('users');
   }
 
+  // Doğrulama beklenen, henüz aktif olmayan kayıtlar.
+  // Kullanıcı kodu doğru girene kadar burada durur, doğrulanınca
+  // usersCollection()'a taşınır ve buradan silinir.
+  static Future<DbCollection> pendingRegistrationsCollection() async {
+    final db = await database;
+    return db.collection('pendingRegistrations');
+  }
+
   static Future<DbCollection> notesCollection() async {
     final db = await database;
     return db.collection('notes');

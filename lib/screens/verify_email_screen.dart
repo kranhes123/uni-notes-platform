@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../widgets/custom_header.dart';
 import '../widgets/custom_footer.dart';
@@ -14,12 +15,36 @@ class VerifyEmailScreen extends StatefulWidget {
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   final codeController = TextEditingController();
   bool isLoading = false;
+  String language = 'TR';
+
+  bool get isEnglish => language == 'EN';
+  String t(String tr, String en) => isEnglish ? en : tr;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLanguage();
+  }
+
+  Future<void> _loadLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      language = prefs.getString('language') ?? 'TR';
+    });
+  }
+
+  // Header dil değişikliğini yakala
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadLanguage();
+  }
 
   Future<void> verifyCode() async {
     final code = codeController.text.trim();
     if (code.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen 6 haneli kodu girin.')),
+        SnackBar(content: Text(t('Lütfen 6 haneli kodu girin.', 'Please enter the 6-digit code.'))),
       );
       return;
     }
@@ -36,17 +61,20 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
       if (result['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('E-posta doğrulandı! Giriş yapabilirsiniz.')),
+          SnackBar(content: Text(t(
+            'E-posta doğrulandı! Giriş yapabilirsiniz.',
+            'Email verified! You can now log in.',
+          ))),
         );
         Navigator.pushNamedAndRemoveUntil(context, '/login', (r) => false);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'] ?? 'Kod hatalı.')),
+          SnackBar(content: Text(result['message'] ?? t('Kod hatalı.', 'Invalid code.'))),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata: $e')),
+        SnackBar(content: Text('${t('Hata', 'Error')}: $e')),
       );
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -97,7 +125,6 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // İkon
                                   Container(
                                     width: 80,
                                     height: 80,
@@ -112,19 +139,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 24),
-
-                                  // Başlık
-                                  const Text(
-                                    'E-posta Doğrulama',
-                                    style: TextStyle(
+                                  Text(
+                                    t('E-posta Doğrulama', 'Email Verification'),
+                                    style: const TextStyle(
                                       fontSize: 28,
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF111827),
                                     ),
                                   ),
                                   const SizedBox(height: 12),
-
-                                  // Açıklama
                                   RichText(
                                     textAlign: TextAlign.center,
                                     text: TextSpan(
@@ -134,7 +157,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                         height: 1.6,
                                       ),
                                       children: [
-                                        const TextSpan(text: 'Doğrulama kodu '),
+                                        TextSpan(text: t(
+                                          'Doğrulama kodu ',
+                                          'A verification code was sent to ',
+                                        )),
                                         TextSpan(
                                           text: widget.email,
                                           style: const TextStyle(
@@ -142,15 +168,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                        const TextSpan(
-                                          text: ' adresine gönderildi.\n6 haneli kodu aşağıya girin.',
-                                        ),
+                                        TextSpan(text: t(
+                                          ' adresine gönderildi.\n6 haneli kodu aşağıya girin.',
+                                          '.\nEnter the 6-digit code below.',
+                                        )),
                                       ],
                                     ),
                                   ),
                                   const SizedBox(height: 32),
-
-                                  // Kod alanı
                                   Container(
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF9FAFB),
@@ -184,17 +209,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 12),
-
-                                  // Kod süresi bilgisi
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
-                                    children: const [
-                                      Icon(Icons.access_time_rounded,
+                                    children: [
+                                      const Icon(Icons.access_time_rounded,
                                           size: 14, color: Color(0xFF9CA3AF)),
-                                      SizedBox(width: 4),
+                                      const SizedBox(width: 4),
                                       Text(
-                                        'Kod 15 dakika geçerlidir.',
-                                        style: TextStyle(
+                                        t('Kod 15 dakika geçerlidir.', 'Code is valid for 15 minutes.'),
+                                        style: const TextStyle(
                                           fontSize: 13,
                                           color: Color(0xFF9CA3AF),
                                         ),
@@ -202,8 +225,6 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: 28),
-
-                                  // Doğrula butonu
                                   SizedBox(
                                     width: double.infinity,
                                     child: ElevatedButton(
@@ -226,9 +247,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                                 color: Colors.white,
                                               ),
                                             )
-                                          : const Text(
-                                              'Doğrula',
-                                              style: TextStyle(
+                                          : Text(
+                                              t('Doğrula', 'Verify'),
+                                              style: const TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w600,
                                               ),
@@ -236,14 +257,11 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 16),
-
-                                  // Geri dön
                                   TextButton.icon(
-                                    onPressed: () =>
-                                        Navigator.pushNamedAndRemoveUntil(
-                                            context, '/login', (r) => false),
+                                    onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                                        context, '/login', (r) => false),
                                     icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                                    label: const Text('Giriş sayfasına dön'),
+                                    label: Text(t('Giriş sayfasına dön', 'Back to login')),
                                     style: TextButton.styleFrom(
                                       foregroundColor: const Color(0xFF6B7280),
                                     ),

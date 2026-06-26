@@ -68,7 +68,10 @@ Future<Response> onRequest(RequestContext context) async {
     if (!isValidEmail(email)) {
       return Response.json(
         statusCode: 400,
-        body: {'message': 'Lütfen geçerli bir Erciyes Üniversitesi mail adresi girin (@erciyes.edu.tr).'},
+        body: {
+          'message':
+              'Lütfen geçerli bir Erciyes Üniversitesi mail adresi girin (@erciyes.edu.tr).'
+        },
       );
     }
 
@@ -97,7 +100,9 @@ Future<Response> onRequest(RequestContext context) async {
     }
 
     final users = await DbService.usersCollection();
+    final pending = await DbService.pendingRegistrationsCollection();
 
+    // Asıl kullanıcı tablosunda bu email zaten var mı?
     final existingUser = await users.findOne({'email': email});
     if (existingUser != null) {
       return Response.json(
@@ -108,26 +113,31 @@ Future<Response> onRequest(RequestContext context) async {
 
     // 6 haneli kod üret, 15 dakika geçerli
     final code = (Random().nextInt(900000) + 100000).toString();
-    final expiresAt = DateTime.now()
-        .add(const Duration(minutes: 15))
-        .toIso8601String();
+    final now = DateTime.now();
+    final expiresAt = now.add(const Duration(minutes: 15)).toIso8601String();
 
-    await users.insertOne({
-      '_id': ObjectId(),
+    final pendingDoc = {
       'fullName': fullName,
       'email': email,
       'passwordHash': hashPassword(password),
       'university': university,
       'department': department,
       'grade': grade,
-      'selectedCourses': <Map<String, dynamic>>[],
-      'isVerified': false,
       'verificationCode': code,
       'verificationExpiresAt': expiresAt,
-      'createdAt': DateTime.now().toIso8601String(),
-    });
+      'createdAt': now.toIso8601String(),
+    };
 
-    // Resend ile doğrulama maili gönder
+    // Aynı email için daha önce bekleyen bir kayıt varsa
+    // (kullanıcı tekrar kayıt denedi, kod yeniden gönderildi) üzerine yaz.
+    // upsert ile hem "yoksa ekle" hem "varsa güncelle" tek satırda çözülür.
+    await pending.replaceOne(
+      {'email': email},
+      pendingDoc,
+      upsert: true,
+    );
+
+    // Resend ile doğrulama maili gönder — KULLANICININ KENDİ EMAİLİNE
     final resendApiKey = Platform.environment['RESEND_API_KEY'] ?? '';
     final mailResponse = await http.post(
       Uri.parse('https://api.resend.com/emails'),
@@ -154,10 +164,14 @@ Future<Response> onRequest(RequestContext context) async {
 
     if (mailResponse.statusCode != 200 && mailResponse.statusCode != 201) {
       print('RESEND ERROR: ${mailResponse.body}');
+      // Mail gitmediyse bekleyen kaydı da silelim ki kullanıcı kilitlenmesin,
+      // tekrar kayıt denediğinde "zaten kayıtlı" hatası almasın.
+      await pending.deleteOne({'email': email});
       return Response.json(
         statusCode: 500,
         body: {
-          'message': 'Hesap oluşturuldu ancak doğrulama maili gönderilemedi. Lütfen destek ile iletişime geçin.',
+          'message':
+              'Doğrulama maili gönderilemedi. Lütfen tekrar deneyin.',
         },
       );
     }
@@ -165,7 +179,7 @@ Future<Response> onRequest(RequestContext context) async {
     return Response.json(
       statusCode: 201,
       body: {
-        'message': 'Kayıt başarılı',
+        'message': 'Doğrulama kodu e-postanıza gönderildi.',
         'email': email,
         'needsVerification': true,
       },
