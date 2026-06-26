@@ -136,7 +136,7 @@ Future<Response> onRequest(RequestContext context) async {
         'Content-Type': 'application/json',
       },
       body: jsonEncode({
-        'from': 'Uni Notes <noreply@uninotes.com.tr>',
+        'from': 'Uni Notes <onboarding@resend.dev>',
         'to': [email],
         'subject': 'E-posta Doğrulama Kodu',
         'html': '''
