@@ -147,7 +147,7 @@ Future<Response> onRequest(RequestContext context) async {
       },
       body: jsonEncode({
         'from': 'Uni Notes <onboarding@resend.dev>',
-        'to':  ['duzyol975337@gmail.com'],
+        'to': [email],
         'subject': 'E-posta Doğrulama Kodu',
         'html': '''
           <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 32px; border-radius: 12px; border: 1px solid #e5e7eb;">
